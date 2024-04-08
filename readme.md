@@ -4,6 +4,8 @@
 A simple GUI App to safely encrypt any file
 
 
+![Screenshot](src/img/app.png)
+
 
 ## How it works
 
