@@ -203,10 +203,27 @@ impl NCryptApp {
     fn encrypt(&mut self, ui: &mut Ui) {
         
             if ui.button("Encrypt").clicked() {
-                let file = File::new(self.app_data.file.path.clone());
+                let file = match File::new(self.app_data.file.path.clone()) {
+                    Ok(file) => file,
+                    Err(e) => {
+                        println!("Error: {:?}", e);
+                        self.ui.message = format!("Error: {:?}", e);
+                        self.ui.show_window_msg = true;
+                        return;
+                    }
+                };
+                let path = match file.encrypted_path() {
+                    Ok(path) => path,
+                    Err(e) => {
+                        self.ui.message = format!("Error: {:?}", e);
+                        self.ui.show_window_msg = true;
+                        return;
+                    }
+                };
+                println!("Encrypted file path: {}", path);
+
                 let credentials = self.app_data.credentials.clone();
-                println!("File Path: {}", file.path);
-                println!("File Extension: {}", file.extension);
+
 
                 let params = match
                     Params::new(
@@ -229,7 +246,7 @@ impl NCryptApp {
 
                 match encrypt(argon2, credentials, file) {
                     Ok(_) => {
-                        self.ui.message = format!("{}\nLocation: {}", SUCCESS_ENCRYPT, self.app_data.file.name_encrypted());
+                        self.ui.message = format!("{}\nLocation: {}", SUCCESS_ENCRYPT, path);
                         self.ui.show_window_msg = true;
                     }
                     Err(e) => {
@@ -245,13 +262,31 @@ impl NCryptApp {
     fn decrypt(&mut self, ui: &mut Ui) {
         
             if ui.button("Decrypt").clicked() {
-                let file = File::new(self.app_data.file.path.clone());
+               
+                let file = match File::new(self.app_data.file.path.clone()) {
+                    Ok(file) => file,
+                    Err(e) => {
+                        println!("Error: {:?}", e);
+                        self.ui.message = format!("Error: {:?}", e);
+                        self.ui.show_window_msg = true;
+                        return;
+                    }
+                };
+                    
                 let credentials = self.app_data.credentials.clone();
-
+                let path = match file.decrypted_path() {
+                    Ok(path) => path,
+                    Err(e) => {
+                        self.ui.message = format!("Error: {:?}", e);
+                        self.ui.show_window_msg = true;
+                        return;
+                    }
+                };
+                println!("Decrypted file path: {}", path);
 
                 match decrypt(file, credentials) {
                     Ok(_) => {
-                        self.ui.message = format!("{}\nLocation: {}", SUCCESS_DECRYPT, self.app_data.file.name_decrypted());
+                        self.ui.message = format!("{}\nLocation: {}", SUCCESS_DECRYPT, path);
                         self.ui.show_window_msg = true;
                     }
                     Err(e) => {

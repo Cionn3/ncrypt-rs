@@ -5,7 +5,8 @@ use aes_gcm::{ Aes256Gcm, KeyInit, aead::{ Aead, generic_array::GenericArray } }
 use sha2::{ Sha256, digest::Digest };
 
 use std::fs;
-
+use std::path::{Path, PathBuf};
+use anyhow::Context;
 
 
 const IDENTIFIER: &[u8] = b"nCrypt_Params";
@@ -30,6 +31,7 @@ pub const MAX_HASH_LENGTH: usize = 64;
 
 pub struct File {
     pub path: String,
+    pub name: String,
     pub extension: String,
 }
 
@@ -37,6 +39,7 @@ impl Default for File {
     fn default() -> Self {
         Self {
             path: Default::default(),
+            name: Default::default(),
             extension: Default::default(),
         }
     }
@@ -82,24 +85,48 @@ impl Default for Credentials {
 }
 
 impl File {
-    pub fn new(path: String) -> File {
-        let path_clone = path.clone();
-        let extension = path_clone.split(".").last().expect("Failed to get file extension");
-        File {
+    pub fn new(path: String) -> Result<File, anyhow::Error> {
+        let path_obj = Path::new(&path);
+
+        let name = path_obj.file_name().ok_or(anyhow::anyhow!("Failed to get file name"))?;
+        let name = String::from(name.to_str().ok_or(anyhow::anyhow!("Failed to convert file name to string"))?);
+        
+        let extension = path_obj.extension().ok_or(anyhow::anyhow!("Failed to get file extension"))?;
+        let extension = String::from(extension.to_str().ok_or(anyhow::anyhow!("Failed to convert file extension to string"))?);
+
+        Ok(File {
             path,
-            extension: extension.to_string(),
-        }
+            name,
+            extension,
+        })
     }
 
     pub fn name_encrypted(&self) -> String {
-        format!("{}_encrypted.nc", self.path)
+        format!("{}_encrypted.nc", self.name)
     }
 
+    /// Removes the "_encrypted.nc" extension
     pub fn name_decrypted(&self) -> String {
-        // Remove the "_encrypted.nc" extension
-        let name = self.path.replace("_encrypted.nc", "");
+        let name = self.name.replace("_encrypted.nc", "");
         format!("{}", name)
     }
+
+    pub fn decrypted_path(&self) -> Result<String, anyhow::Error> {
+        let mut path = current_dir()?;
+        path.push(self.name_decrypted());
+        path.to_str()
+            .ok_or_else(|| anyhow::anyhow!("Failed to convert path to string"))
+            .map(|s| s.to_string())
+    }
+    
+    pub fn encrypted_path(&self) -> Result<String, anyhow::Error> {
+        let mut path = current_dir()?;
+        path.push(self.name_encrypted());
+        path.to_str()
+            .ok_or_else(|| anyhow::anyhow!("Failed to convert path to string"))
+            .map(|s| s.to_string())
+    }
+
 
     pub fn is_encrypted(&self, data: &[u8]) -> bool {
         if let Some(_id) = find_identifier_position(data, IDENTIFIER) {
@@ -144,6 +171,12 @@ pub fn encrypt(argon: Argon2, credentials: Credentials, file: File) -> Result<()
         return Err(anyhow::anyhow!("Invalid credentials, Username and Password must be provided"));
     }
 
+    let file_data = fs::read(&file.path)?;
+
+    if file.is_encrypted(&file_data.as_ref()) {
+        return Err(anyhow::anyhow!("File is already encrypted"));
+    }
+
     let salt = credentials.generate_saltstring();
 
     let password_hash = match argon.hash_password(credentials.password.as_bytes(), &salt) {
@@ -158,12 +191,6 @@ pub fn encrypt(argon: Argon2, credentials: Credentials, file: File) -> Result<()
     let nonce = Sha256::digest(credentials.username.as_bytes());
     let nonce = GenericArray::from_slice(&nonce.as_slice()[..12]);
 
-    let file_data = fs::read(&file.path)?;
-
-    if file.is_encrypted(&file_data.as_ref()) {
-        return Err(anyhow::anyhow!("File is already encrypted"));
-    }
-
     let encrypted_file = match cipher.encrypt(&nonce, file_data.as_ref()) {
         Ok(data) => data,
         Err(e) => return Err(anyhow::anyhow!("Failed to encrypt file {:?}", e)),
@@ -175,7 +202,7 @@ pub fn encrypt(argon: Argon2, credentials: Credentials, file: File) -> Result<()
         "t_cost": argon.params().t_cost(),
         "p_cost": argon.params().p_cost(),
         "hash_length": argon.params().output_len(),
-        "file_name": file.path,
+        "file_name": file.name,
     });
 
     let ncrypt_params = ncrypt_params.to_string().as_bytes().to_vec();
@@ -260,7 +287,7 @@ fn get_file_data(path: &str) -> Result<EncryptedFile, anyhow::Error> {
         t_cost.try_into()?,
         p_cost.try_into()?,
         Some(hash_length.try_into()?)
-    ).unwrap();
+    ).map_err(|e| anyhow::anyhow!("Failed to create Argon2 params {:?}", e))?;
     let argon2 = Argon2::new(Algorithm::default(), Version::default(), params.clone());
 
     Ok(EncryptedFile {
@@ -273,3 +300,12 @@ fn get_file_data(path: &str) -> Result<EncryptedFile, anyhow::Error> {
 fn find_identifier_position(data: &[u8], identifier: &[u8]) -> Option<usize> {
     data.windows(identifier.len()).rposition(|window| window == identifier)
 }
+
+    /// Get the current directory the executable is running from
+    pub fn current_dir() -> anyhow::Result<PathBuf> {
+        Ok(std::env::current_exe()
+            .context("Failed to get the current executable path")?
+            .parent()
+            .context("Failed to get the executable's directory")?
+            .to_path_buf())
+    }
