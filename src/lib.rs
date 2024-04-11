@@ -1,13 +1,14 @@
-use password_hash::{PasswordHasher, SaltString };
+use password_hash::{ Output, PasswordHasher, SaltString };
 use argon2::{ Algorithm, Argon2, Params, Version };
 
 use aes_gcm::{ Aes256Gcm, KeyInit, aead::{ Aead, generic_array::GenericArray } };
+use chacha20poly1305::{ XChaCha20Poly1305, XNonce };
+
 use sha2::{ Sha256, digest::Digest };
 
 use std::fs;
-use std::path::{Path, PathBuf};
-use anyhow::Context;
-
+use std::path::{ Path, PathBuf };
+use anyhow::{ Context, anyhow };
 
 const IDENTIFIER: &[u8] = b"nCrypt_Params";
 
@@ -29,6 +30,53 @@ pub const MAX_P_COST: u32 = 64;
 /// Maximum Hash Length
 pub const MAX_HASH_LENGTH: usize = 64;
 
+/// Holds the encryption settings
+pub struct EncryptionInstance<'a> {
+    pub algorithm: EncryptionAlgorithm,
+    pub argon2: Argon2<'a>,
+    pub credentials: Credentials,
+}
+
+impl Default for EncryptionInstance<'_> {
+    fn default() -> Self {
+        Self {
+            algorithm: Default::default(),
+            argon2: Default::default(),
+            credentials: Default::default(),
+        }
+    }
+}
+
+impl<'a> EncryptionInstance<'a> {
+    pub fn new(
+        algorithm: EncryptionAlgorithm,
+        argon2: Argon2<'a>,
+        credentials: Credentials
+    ) -> Self {
+        Self {
+            algorithm,
+            argon2,
+            credentials,
+        }
+    }
+
+    pub fn algorithm(&self) -> String {
+        match self.algorithm {
+            EncryptionAlgorithm::XChaCha20Poly1305 => "XChaCha20Poly1305".to_string(),
+            EncryptionAlgorithm::Aes256Gcm => "Aes256Gcm".to_string(),
+        }
+    }
+}
+
+/// The encryption algorithm to use
+#[derive(Clone, Default, PartialEq)]
+pub enum EncryptionAlgorithm {
+    XChaCha20Poly1305,
+    #[default]
+    Aes256Gcm,
+}
+
+/// The chosen file to encrypt or decrypt
 pub struct File {
     pub path: String,
     pub name: String,
@@ -45,54 +93,19 @@ impl Default for File {
     }
 }
 
-/// `data` The encrypted file data
-///
-/// `argon2` The Argon2 instance used to encrypt the file
-///
-/// `name` The original name of the file
-pub struct EncryptedFile<'a> {
-    data: Vec<u8>,
-    argon2: Argon2<'a>,
-    name: String,
-}
-
-impl Default for EncryptedFile<'_> {
-    fn default() -> Self {
-        Self {
-            data: Default::default(),
-            argon2: Default::default(),
-            name: Default::default(),
-        }
-    }
-}
-
-/// The credentials used to encrypt a file
-#[derive(Clone, Debug)]
-pub struct Credentials {
-    pub username: String,
-    pub password: String,
-    pub confrim_password: String,
-}
-
-impl Default for Credentials {
-    fn default() -> Self {
-        Self {
-            username: Default::default(),
-            password: Default::default(),
-            confrim_password: Default::default(),
-        }
-    }
-}
-
 impl File {
     pub fn new(path: String) -> Result<File, anyhow::Error> {
         let path_obj = Path::new(&path);
 
-        let name = path_obj.file_name().ok_or(anyhow::anyhow!("Failed to get file name"))?;
-        let name = String::from(name.to_str().ok_or(anyhow::anyhow!("Failed to convert file name to string"))?);
-        
-        let extension = path_obj.extension().ok_or(anyhow::anyhow!("Failed to get file extension"))?;
-        let extension = String::from(extension.to_str().ok_or(anyhow::anyhow!("Failed to convert file extension to string"))?);
+        let name = path_obj.file_name().ok_or(anyhow!("Failed to get file name"))?;
+        let name = String::from(
+            name.to_str().ok_or(anyhow!("Failed to convert file name to string"))?
+        );
+
+        let extension = path_obj.extension().ok_or(anyhow!("Failed to get file extension"))?;
+        let extension = String::from(
+            extension.to_str().ok_or(anyhow!("Failed to convert file extension to string"))?
+        );
 
         Ok(File {
             path,
@@ -118,7 +131,7 @@ impl File {
             .ok_or_else(|| anyhow::anyhow!("Failed to convert path to string"))
             .map(|s| s.to_string())
     }
-    
+
     pub fn encrypted_path(&self) -> Result<String, anyhow::Error> {
         let mut path = current_dir()?;
         path.push(self.name_encrypted());
@@ -127,7 +140,6 @@ impl File {
             .map(|s| s.to_string())
     }
 
-
     pub fn is_encrypted(&self, data: &[u8]) -> bool {
         if let Some(_id) = find_identifier_position(data, IDENTIFIER) {
             return true;
@@ -135,8 +147,67 @@ impl File {
             return false;
         }
     }
+}
 
-    
+/// A file that has been encrypted
+///
+/// `data` The encrypted file data
+///
+/// `argon2` The Argon2 instance used to encrypt the file
+///
+/// `algorithm` The encryption algorithm used to encrypt the file
+///
+/// `name` The original name of the file
+pub struct EncryptedFile<'a> {
+    data: Vec<u8>,
+    argon2: Argon2<'a>,
+    algorithm: EncryptionAlgorithm,
+    name: String,
+}
+
+impl Default for EncryptedFile<'_> {
+    fn default() -> Self {
+        Self {
+            data: Default::default(),
+            argon2: Default::default(),
+            algorithm: Default::default(),
+            name: Default::default(),
+        }
+    }
+}
+
+impl<'a> EncryptedFile<'a> {
+    pub fn new(data: Vec<u8>, argon2: Argon2<'a>, name: String, algo: &str) -> Self {
+        let algorithm = match algo {
+            "XChaCha20Poly1305" => EncryptionAlgorithm::XChaCha20Poly1305,
+            "Aes256Gcm" => EncryptionAlgorithm::Aes256Gcm,
+            _ => EncryptionAlgorithm::Aes256Gcm,
+        };
+        Self {
+            data,
+            argon2,
+            algorithm,
+            name,
+        }
+    }
+}
+
+/// The credentials used to encrypt a file
+#[derive(Clone, Debug)]
+pub struct Credentials {
+    pub username: String,
+    pub password: String,
+    pub confrim_password: String,
+}
+
+impl Default for Credentials {
+    fn default() -> Self {
+        Self {
+            username: Default::default(),
+            password: Default::default(),
+            confrim_password: Default::default(),
+        }
+    }
 }
 
 impl Credentials {
@@ -152,65 +223,74 @@ impl Credentials {
         SaltString::from_b64(&salt).unwrap()
     }
 
-    pub fn confrim_password(&self) -> bool {
-        self.password == self.confrim_password
-    }
-
-    pub fn is_valid(&self) -> bool {
-        self.username.len() > 0 && self.password.len() > 0 && self.confrim_password.len() > 0
+    pub fn is_valid(&self) -> Result<(), anyhow::Error> {
+        if self.username.is_empty() || self.password.is_empty() || self.confrim_password.is_empty() {
+            return Err(anyhow!("Username and Password must be provided"));
+        } else if self.password != self.confrim_password {
+            return Err(anyhow!("Passwords do not match"));
+        } else {
+            Ok(())
+        }
     }
 }
 
-pub fn encrypt(argon: Argon2, credentials: Credentials, file: File) -> Result<(), anyhow::Error> {
-
-    if !credentials.confrim_password() {
-        return Err(anyhow::anyhow!("Passwords do not match"));
-    }
-
-    if !credentials.is_valid() {
-        return Err(anyhow::anyhow!("Invalid credentials, Username and Password must be provided"));
-    }
+pub fn encrypt(encryption: EncryptionInstance, file: File) -> Result<(), anyhow::Error> {
+    encryption.credentials.is_valid()?;
 
     let file_data = fs::read(&file.path)?;
 
     if file.is_encrypted(&file_data.as_ref()) {
-        return Err(anyhow::anyhow!("File is already encrypted"));
+        return Err(anyhow!("File is already encrypted"));
     }
 
-    let salt = credentials.generate_saltstring();
-
-    let password_hash = match argon.hash_password(credentials.password.as_bytes(), &salt) {
+    let salt = encryption.credentials.generate_saltstring();
+    let password_hash = match
+        encryption.argon2.hash_password(encryption.credentials.password.as_bytes(), &salt)
+    {
         Ok(hash) => hash,
-        Err(e) => return Err(anyhow::anyhow!("Failed to hash password {:?}", e)),
+        Err(e) => {
+            return Err(anyhow!("Failed to hash password {:?}", e));
+        }
     };
 
-    let key = password_hash.hash.ok_or(anyhow::anyhow!("Failed to get the hash output"))?;
-    let file_key = GenericArray::from_slice(&key.as_bytes()[..32]);
-    let cipher = Aes256Gcm::new(file_key);
+    let key = password_hash.hash.ok_or(anyhow!("Failed to get the hash output"))?;
 
-    let nonce = Sha256::digest(credentials.username.as_bytes());
-    let nonce = GenericArray::from_slice(&nonce.as_slice()[..12]);
-
-    let encrypted_file = match cipher.encrypt(&nonce, file_data.as_ref()) {
-        Ok(data) => data,
-        Err(e) => return Err(anyhow::anyhow!("Failed to encrypt file {:?}", e)),
+    let encrypted_data = match encryption.algorithm {
+        EncryptionAlgorithm::XChaCha20Poly1305 => {
+            let cipher = xchacha20_poly_1305(key);
+            let hash = Sha256::digest(encryption.credentials.username.as_bytes());
+            let nonce = XNonce::from_slice(&hash.as_slice()[..24]);
+            cipher
+                .encrypt(nonce, file_data.as_ref())
+                .map_err(|e| anyhow!("Failed to encrypt file {:?}", e))?
+        }
+        EncryptionAlgorithm::Aes256Gcm => {
+            let cipher = aes_gcm(key);
+            let hash = Sha256::digest(encryption.credentials.username.as_bytes());
+            let nonce = GenericArray::from_slice(&hash.as_slice()[..12]);
+            cipher
+                .encrypt(&nonce, file_data.as_ref())
+                .map_err(|e| anyhow!("Failed to encrypt file {:?}", e))?
+        }
     };
 
     let ncrypt_params =
         serde_json::json!({
-        "m_cost": argon.params().m_cost(),
-        "t_cost": argon.params().t_cost(),
-        "p_cost": argon.params().p_cost(),
-        "hash_length": argon.params().output_len(),
+        "m_cost": encryption.argon2.params().m_cost(),
+        "t_cost": encryption.argon2.params().t_cost(),
+        "p_cost": encryption.argon2.params().p_cost(),
+        "hash_length": encryption.argon2.params().output_len(),
         "file_name": file.name,
-    });
-
-    let ncrypt_params = ncrypt_params.to_string().as_bytes().to_vec();
+        "encryption": encryption.algorithm(),
+    })
+            .to_string()
+            .as_bytes()
+            .to_vec();
 
     let params_with_identifier = [IDENTIFIER, ncrypt_params.as_slice()].concat();
 
     let encrypted_file_with_metadata = [
-        encrypted_file.as_slice(),
+        encrypted_data.as_slice(),
         params_with_identifier.as_slice(),
     ].concat();
 
@@ -220,38 +300,42 @@ pub fn encrypt(argon: Argon2, credentials: Credentials, file: File) -> Result<()
 }
 
 pub fn decrypt(file: File, credentials: Credentials) -> Result<(), anyhow::Error> {
-
-    if !credentials.confrim_password() {
-        return Err(anyhow::anyhow!("Passwords do not match"));
-    }
-
-    if !credentials.is_valid() {
-        return Err(anyhow::anyhow!("Invalid credentials, Username and Password must be provided"));
-    }
+    credentials.is_valid()?;
 
     let encrypted_file = get_file_data(&file.path)?;
     let salt = credentials.generate_saltstring();
 
-    let password_hash = match encrypted_file.argon2
-        .hash_password(credentials.password.as_bytes(), &salt) {
+    let password_hash = match
+        encrypted_file.argon2.hash_password(credentials.password.as_bytes(), &salt)
+    {
         Ok(hash) => hash,
-        Err(e) => return Err(anyhow::anyhow!("Failed to hash password {:?}", e)),
-    };
-        
-
-    let key = password_hash.hash.ok_or(anyhow::anyhow!("Failed to get the hash output"))?;
-    let file_key = GenericArray::from_slice(&key.as_bytes()[..32]);
-    let cipher = Aes256Gcm::new(file_key);
-
-    let nonce = Sha256::digest(credentials.username.as_bytes());
-    let nonce = GenericArray::from_slice(&nonce.as_slice()[..12]);
-
-    let decrypted_file = match cipher.decrypt(&nonce, encrypted_file.data.as_ref()) {
-        Ok(data) => data,
-        Err(e) => return Err(anyhow::anyhow!("Failed to decrypt file {:?}", e)),
+        Err(e) => {
+            return Err(anyhow!("Failed to hash password {:?}", e));
+        }
     };
 
-    fs::write(&encrypted_file.name, decrypted_file)?;
+    let key = password_hash.hash.ok_or(anyhow!("Failed to get the hash output"))?;
+
+    let decrypted_data = match encrypted_file.algorithm {
+        EncryptionAlgorithm::XChaCha20Poly1305 => {
+            let cipher = xchacha20_poly_1305(key);
+            let hash = Sha256::digest(credentials.username.as_bytes());
+            let nonce = XNonce::from_slice(&hash.as_slice()[..24]);
+            cipher
+                .decrypt(nonce, encrypted_file.data.as_ref())
+                .map_err(|e| anyhow!("Failed to decrypt file {:?}", e))?
+        }
+        EncryptionAlgorithm::Aes256Gcm => {
+            let cipher = aes_gcm(key);
+            let hash = Sha256::digest(credentials.username.as_bytes());
+            let nonce = GenericArray::from_slice(&hash.as_slice()[..12]);
+            cipher
+                .decrypt(&nonce, encrypted_file.data.as_slice())
+                .map_err(|e| anyhow!("Failed to decrypt file {:?}", e))?
+        }
+    };
+
+    fs::write(&encrypted_file.name, decrypted_data)?;
     Ok(())
 }
 
@@ -261,51 +345,58 @@ fn get_file_data(path: &str) -> Result<EncryptedFile, anyhow::Error> {
     let identifier_position = find_identifier_position(&file, IDENTIFIER).ok_or(
         anyhow::anyhow!("Failed to find identifier, Is the file encrypted?")
     )?;
-    let (encrypted_file, identifier_data) = file.split_at(identifier_position);
+    let (encrypted_data, identifier_data) = file.split_at(identifier_position);
     let file_params = &identifier_data[IDENTIFIER.len()..];
 
-    // Parse the Argon2 params
+    // Parse the encryption params
     let params: serde_json::Value = serde_json::from_slice(file_params)?;
-    let m_cost = params["m_cost"].as_u64().ok_or(
-        anyhow::anyhow!("Failed to parse m_cost")
-    )?;
-    let t_cost = params["t_cost"].as_u64().ok_or(
-        anyhow::anyhow!("Failed to parse t_cost")
-    )?;
-    let p_cost = params["p_cost"].as_u64().ok_or(
-        anyhow::anyhow!("Failed to parse p_cost")
-    )?;
-    let hash_length = params["hash_length"].as_u64().ok_or(
-        anyhow::anyhow!("Failed to parse hash_length")
-    )?;
-    let file_name = params["file_name"].as_str().ok_or(
-        anyhow::anyhow!("Failed to parse file_name")
-    )?;
+    let m_cost = params["m_cost"].as_u64().ok_or(anyhow!("Failed to parse m_cost"))?;
+    let t_cost = params["t_cost"].as_u64().ok_or(anyhow!("Failed to parse t_cost"))?;
+    let p_cost = params["p_cost"].as_u64().ok_or(anyhow!("Failed to parse p_cost"))?;
+    let hash_length = params["hash_length"].as_u64().ok_or(anyhow!("Failed to parse hash_length"))?;
+    let file_name = params["file_name"].as_str().ok_or(anyhow!("Failed to parse file_name"))?;
+    let algo_used = params["encryption"].as_str().ok_or(anyhow!("Failed to parse encryption"))?;
 
     let params = Params::new(
         m_cost.try_into()?,
         t_cost.try_into()?,
         p_cost.try_into()?,
         Some(hash_length.try_into()?)
-    ).map_err(|e| anyhow::anyhow!("Failed to create Argon2 params {:?}", e))?;
-    let argon2 = Argon2::new(Algorithm::default(), Version::default(), params.clone());
+    ).map_err(|e| anyhow!("Failed to create Argon2 params {:?}", e))?;
 
-    Ok(EncryptedFile {
-        data: encrypted_file.to_vec(),
+    let argon2 = Argon2::new(Algorithm::default(), Version::default(), params.clone());
+    let encrypted_file = EncryptedFile::new(
+        encrypted_data.to_vec(),
         argon2,
-        name: file_name.to_string(),
-    })
+        file_name.to_string(),
+        algo_used
+    );
+
+    Ok(encrypted_file)
 }
 
 fn find_identifier_position(data: &[u8], identifier: &[u8]) -> Option<usize> {
     data.windows(identifier.len()).rposition(|window| window == identifier)
 }
 
-    /// Get the current directory the executable is running from
-    pub fn current_dir() -> anyhow::Result<PathBuf> {
-        Ok(std::env::current_exe()
+/// Get the current directory the executable is running from
+pub fn current_dir() -> anyhow::Result<PathBuf> {
+    Ok(
+        std::env
+            ::current_exe()
             .context("Failed to get the current executable path")?
             .parent()
             .context("Failed to get the executable's directory")?
-            .to_path_buf())
-    }
+            .to_path_buf()
+    )
+}
+
+pub fn aes_gcm(key: Output) -> Aes256Gcm {
+    let key = GenericArray::from_slice(&key.as_bytes()[..32]);
+    Aes256Gcm::new(key)
+}
+
+pub fn xchacha20_poly_1305(key: Output) -> XChaCha20Poly1305 {
+    let key = GenericArray::from_slice(&key.as_bytes()[..32]);
+    XChaCha20Poly1305::new(key)
+}

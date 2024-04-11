@@ -22,6 +22,7 @@ struct AppData {
     pub credentials: Credentials,
     pub file: File,
     pub argon_params: ArgonParams,
+    pub algorithm: EncryptionAlgorithm
 }
 
 struct ArgonParams {
@@ -57,6 +58,7 @@ impl Default for AppData {
             credentials: Default::default(),
             file: Default::default(),
             argon_params: Default::default(),
+            algorithm: Default::default(),
         }
     }
 }
@@ -88,6 +90,8 @@ impl eframe::App for NCryptApp {
             ::left("left_panel")
             .exact_width(170.0)
             .show(ctx, |ui| {
+                ui.add_space(20.0);
+                self.encryption_select(ui);
                 ui.add_space(10.0);
                 self.argon_params_ui(ui);
             });
@@ -222,8 +226,6 @@ impl NCryptApp {
                 };
                 println!("Encrypted file path: {}", path);
 
-                let credentials = self.app_data.credentials.clone();
-
 
                 let params = match
                     Params::new(
@@ -243,8 +245,9 @@ impl NCryptApp {
                 };
 
                 let argon2 = Argon2::new(Algorithm::default(), Version::default(), params.clone());
+                let encryption = EncryptionInstance::new(self.app_data.algorithm.clone(), argon2, self.app_data.credentials.clone());
 
-                match encrypt(argon2, credentials, file) {
+                match encrypt(encryption, file) {
                     Ok(_) => {
                         self.ui.message = format!("{}\nLocation: {}", SUCCESS_ENCRYPT, path);
                         self.ui.show_window_msg = true;
@@ -299,8 +302,21 @@ impl NCryptApp {
         
     }
 
+    fn encryption_select(&mut self, ui: &mut Ui) {
+                   
+            ui.vertical_centered(|ui| {
+                ui.label("Encryption:");
+                ui.add_space(10.0);
+                ui.radio_value(&mut self.app_data.algorithm, EncryptionAlgorithm::Aes256Gcm, "AES-256-GCM");
+                ui.add_space(5.0);
+                ui.radio_value(&mut self.app_data.algorithm, EncryptionAlgorithm::XChaCha20Poly1305, "XChaCha20Poly1305");
+            });
+        }
+    
+
     fn argon_params_ui(&mut self, ui: &mut Ui) {
         ui.vertical_centered(|ui| {
+            ui.add_space(15.0);
             ui.label("Argon2id Parameters:");
             ui.add_space(15.0);
             ui.label("Memory Cost (kB):");
