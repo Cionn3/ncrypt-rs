@@ -1,7 +1,6 @@
-
 # nCrypt-rs
 
-A simple GUI App to safely encrypt any file
+### A simple GUI App to safely encrypt any file
 
 
 ![Screenshot](src/img/app.png)
@@ -9,7 +8,10 @@ A simple GUI App to safely encrypt any file
 
 ## How it works
 
-Files are encrypted with [AES-GCM](https://github.com/RustCrypto/AEADs/tree/master/aes-gcm) Authenticated Encryption.
+Files are encrypted with one of the following [AEADs](https://github.com/RustCrypto/AEADs)
+
+- [AES-GCM](https://github.com/RustCrypto/AEADs/tree/master/aes-gcm)
+- [XChaCha20Poly1305](https://github.com/RustCrypto/AEADs/tree/master/chacha20poly1305)
 
 The encryption key is derived from the password hash we generate using the [Argon2id](https://github.com/RustCrypto/password-hashes/blob/master/argon2) hashing alogrithm.
 
@@ -24,7 +26,7 @@ Some Text
 
 It will look like this:
 ```
-qú·²·­ͦ´²<­¯}ůnnCrypt_Params{"file_name":"C:\\Users\\User\\Desktop\\test.txt","hash_length":64,"m_cost":3200,"p_cost":6,"t_cost":10000}
+TÂt¼^oóïúéÏ@Éz52Ø«ï’XcI`nCrypt_Params{"encryption":"XChaCha20Poly1305","file_name":"test.txt","hash_length":64,"m_cost":3600,"p_cost":5,"t_cost":4300}
 ```
 
 ## Build From Source
