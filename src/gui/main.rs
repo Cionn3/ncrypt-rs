@@ -321,7 +321,7 @@ impl NCryptApp {
             ui.add_space(15.0);
             ui.label("Memory Cost (kB):");
 
-            ui.add(egui::Slider::new(&mut self.app_data.argon_params.m_cost, 1024..=MAX_M_COST)
+            ui.add(egui::Slider::new(&mut self.app_data.argon_params.m_cost, MIN_M_COST..=MAX_M_COST)
             .drag_value_speed(100.0)
             .custom_formatter(|v, _ctx| {
                 
@@ -333,7 +333,7 @@ impl NCryptApp {
             ui.add_space(15.0);
             ui.label("Iterations:");
 
-            ui.add(egui::Slider::new(&mut self.app_data.argon_params.t_cost, 1000..=MAX_T_COST)
+            ui.add(egui::Slider::new(&mut self.app_data.argon_params.t_cost, MIN_T_COST..=MAX_T_COST)
             .drag_value_speed(100.0)
             .custom_formatter(|v, _ctx| {
                 
@@ -344,10 +344,10 @@ impl NCryptApp {
 
             ui.add_space(15.0);
             ui.label("Parallelism:");
-            ui.add(egui::Slider::new(&mut self.app_data.argon_params.p_cost, 1..=MAX_P_COST));
+            ui.add(egui::Slider::new(&mut self.app_data.argon_params.p_cost, MIN_P_COST..=MAX_P_COST));
             ui.add_space(15.0);
             ui.label("Hash Length:");
-            ui.add(egui::Slider::new(&mut self.app_data.argon_params.hash_length, 32..=MAX_HASH_LENGTH));
+            ui.add(egui::Slider::new(&mut self.app_data.argon_params.hash_length, MIN_HASH_LENGTH..=MAX_HASH_LENGTH));
 
             ui.add_space(15.0);
         });

@@ -21,14 +21,26 @@ pub const SUCCESS_DECRYPT: &str = "File decrypted successfully";
 /// Maximum Memory Cost
 pub const MAX_M_COST: u32 = 1_000_000;
 
+/// Minimum Memory Cost
+pub const MIN_M_COST: u32 = 4096;
+
 /// Maximum Iterations
 pub const MAX_T_COST: u32 = 1_000_000;
+
+/// Minimum Iterations
+pub const MIN_T_COST: u32 = 2000;
 
 /// Maximum Parallelism
 pub const MAX_P_COST: u32 = 64;
 
+/// Minimum Parallelism
+pub const MIN_P_COST: u32 = 2;
+
 /// Maximum Hash Length
 pub const MAX_HASH_LENGTH: usize = 64;
+
+/// Minimum Hash Length
+pub const MIN_HASH_LENGTH: usize = 32;
 
 /// Holds the encryption settings
 pub struct EncryptionInstance<'a> {
