@@ -246,7 +246,8 @@ impl Credentials {
     }
 }
 
-pub fn encrypt(encryption: EncryptionInstance, file: File) -> Result<(), anyhow::Error> {
+pub fn encrypt(encryption: EncryptionInstance, file: File) -> Result<String, anyhow::Error> {
+    let ncrypted_path = &file.encrypted_path()?;
     encryption.credentials.is_valid()?;
 
     let file_data = fs::read(&file.path)?;
@@ -308,10 +309,11 @@ pub fn encrypt(encryption: EncryptionInstance, file: File) -> Result<(), anyhow:
 
     fs::write(&file.name_encrypted(), &encrypted_file_with_metadata)?;
 
-    Ok(())
+    Ok(ncrypted_path.to_string())
 }
 
-pub fn decrypt(file: File, credentials: Credentials) -> Result<(), anyhow::Error> {
+pub fn decrypt(file: File, credentials: Credentials) -> Result<String, anyhow::Error> {
+    let decrypted_path = &file.decrypted_path()?;
     credentials.is_valid()?;
 
     let encrypted_file = get_file_data(&file.path)?;
@@ -348,7 +350,7 @@ pub fn decrypt(file: File, credentials: Credentials) -> Result<(), anyhow::Error
     };
 
     fs::write(&encrypted_file.name, decrypted_data)?;
-    Ok(())
+    Ok(decrypted_path.to_string())
 }
 
 /// Gets the data of an encrypted file and its nCrypt parameters
