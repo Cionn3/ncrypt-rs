@@ -3,15 +3,12 @@
 ### A simple GUI App to safely encrypt any file
 
 
-![Screenshot](src/img/app.png)
+![Screenshot](app.png)
 
 
 ## How it works
 
-Files are encrypted with one of the following [AEADs](https://github.com/RustCrypto/AEADs)
-
-- [AES-GCM](https://github.com/RustCrypto/AEADs/tree/master/aes-gcm)
-- [XChaCha20Poly1305](https://github.com/RustCrypto/AEADs/tree/master/chacha20poly1305)
+Data is encrypted with [XChaCha20Poly1305](https://github.com/RustCrypto/AEADs/tree/master/chacha20poly1305)
 
 The encryption key is derived from the password hash we generate using the [Argon2id](https://github.com/RustCrypto/password-hashes/blob/master/argon2) hashing alogrithm.
 
@@ -26,10 +23,11 @@ Some Text
 
 It will look like this:
 ```
-TÂt¼^oóïúéÏ@Éz52Ø«ï’XcI`nCrypt_Params{"encryption":"XChaCha20Poly1305","file_name":"test.txt","hash_length":64,"m_cost":3600,"p_cost":5,"t_cost":4300}
+&³1:ß¥\ËºÁs%;8#4à5
+xqparams      È          @
 ```
 
 ## Build From Source
 ```
-cargo build --bin ncrypt --release
+cargo build --release
 ```

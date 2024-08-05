@@ -1,3 +1,4 @@
+workspace = { members = ["crates/encryption"]}
 [package]
 name = "n_crypt"
 version = "0.1.0"
@@ -6,23 +7,14 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+
 # GUI
-egui = "0.26.2"
-eframe = "0.26.2"
+eframe = "0.28.1"
 rfd = "0.14.1"
 
-# Crypto
-password-hash = "0.5.0"
-argon2 = "0.5.3"
-aes-gcm = "0.10.3"
-chacha20poly1305 = "0.10.1"
-sha2 = "0.10.8"
+# Local crates
+encryption = { path = "crates/encryption" }
 
 # Misc
-anyhow = "1.0.44"
-serde_json = "1.0.115"
 num-format = "0.4.4"
-
-[[bin]]
-name = "ncrypt"
-path = "src/gui/main.rs"
+lazy_static = "1.4.0"
