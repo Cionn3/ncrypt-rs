@@ -57,6 +57,10 @@ impl eframe::App for NCryptApp {
             self.window_msg(ui);
         });
     }
+
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        self.credentials.destroy();
+    }
 }
 
 impl NCryptApp {
@@ -168,6 +172,7 @@ impl NCryptApp {
             let argon_params = self.argon_params.clone();
             let file_path = self.file_path.clone();
             let credentials = self.credentials.clone();
+            self.credentials.destroy();
 
             std::thread::spawn(move || {
                 let data = match std::fs::read(file_path.clone()) {
@@ -181,7 +186,7 @@ impl NCryptApp {
                 };
 
                 let encrypted_data = match
-                    encrypt_data(argon_params.clone(), data, credentials.clone())
+                    encrypt_data(argon_params.clone(), data, credentials)
                 {
                     Ok(data) => data,
                     Err(e) => {
@@ -220,6 +225,7 @@ impl NCryptApp {
 
             let file_path = self.file_path.clone();
             let credentials = self.credentials.clone();
+            self.credentials.destroy();
 
             std::thread::spawn(move || {
                 let data = match std::fs::read(file_path.clone()) {
@@ -232,7 +238,7 @@ impl NCryptApp {
                     }
                 };
 
-                let decrypted_data = match decrypt_data(data, credentials.clone()) {
+                let decrypted_data = match decrypt_data(data, credentials) {
                     Ok(data) => data,
                     Err(e) => {
                         let mut pop_msg = POP_MSG.write().unwrap();

@@ -22,7 +22,7 @@ pub fn decrypt_data(data: Vec<u8>, credentials: Credentials) -> Result<Vec<u8>, 
 }
 
 
-pub fn decrypt(credentials: Credentials, data: Vec<u8>) -> Result<Vec<u8>, anyhow::Error> {
+pub fn decrypt(mut credentials: Credentials, data: Vec<u8>) -> Result<Vec<u8>, anyhow::Error> {
     credentials.is_valid()?;
 
     // find the argon2 params in the encrypted data
@@ -65,6 +65,8 @@ pub fn decrypt(credentials: Credentials, data: Vec<u8>) -> Result<Vec<u8>, anyho
 
     let hash = Sha256::digest(credentials.username().as_bytes());
     let nonce = XNonce::from_slice(&hash.as_slice()[..24]);
+
+    credentials.destroy();
 
     let decrypted_data = cipher
         .decrypt(nonce, encrypted_data)

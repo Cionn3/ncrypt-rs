@@ -111,7 +111,7 @@ pub fn encrypt_data(argon_params: Argon2Params, data: Vec<u8>, credentials: Cred
 
 
 /// Encrypts the given data using the provided credentials
-fn encrypt(argon_params: Argon2Params, credentials: Credentials, data: Vec<u8>) -> Result<Vec<u8>, anyhow::Error> {
+fn encrypt(argon_params: Argon2Params, mut credentials: Credentials, data: Vec<u8>) -> Result<Vec<u8>, anyhow::Error> {
     credentials.is_valid()?;
 
     // generate a salt needed for the password hashing
@@ -147,6 +147,8 @@ fn encrypt(argon_params: Argon2Params, credentials: Credentials, data: Vec<u8>) 
     // ! this should be safe
     let hash = Sha256::digest(credentials.username().as_bytes());
     let nonce = XNonce::from_slice(&hash.as_slice()[..24]);
+    
+    credentials.destroy();
 
     let encrypted_data = cipher
         .encrypt(nonce, data.as_ref())

@@ -1,5 +1,6 @@
 use sha2::{ Sha256, digest::Digest };
 use password_hash::SaltString;
+use zeroize::Zeroize;
 
 use anyhow::anyhow;
 
@@ -23,11 +24,11 @@ impl Credentials {
         }
     }
 
-    /// Clear the credentials
-    pub fn clear(&mut self) {
-        self.username.clear();
-        self.password.clear();
-        self.confirm_password.clear();
+    /// Destroy the credentials by zeroizing the username and password
+    pub fn destroy(&mut self) {
+        self.username.zeroize();
+        self.password.zeroize();
+        self.confirm_password.zeroize();
     }
 
     pub fn username(&self) -> &String {
@@ -77,5 +78,23 @@ impl Credentials {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_credentials() {
+        let mut credentials = Credentials::new("test".to_string(), "password".to_string(), "password".to_string());
+        assert!(credentials.is_valid().is_ok());
+
+        let salt = credentials.generate_saltstring().unwrap();
+        assert_eq!(salt.to_string().len(), 64);
+
+        credentials.destroy();
+        assert!(credentials.is_valid().is_err());
     }
 }
