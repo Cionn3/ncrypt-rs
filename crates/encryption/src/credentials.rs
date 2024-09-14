@@ -1,21 +1,15 @@
-use sha2::{ Sha256, digest::Digest };
-use password_hash::SaltString;
 use zeroize::Zeroize;
-
 use anyhow::anyhow;
 
-
 /// The credentials needed to encrypt and decrypt an encrypted file
-#[derive(Clone, Default, Debug, PartialEq)]
+#[derive(Clone, Default)]
 pub struct Credentials {
     username: String,
     password: String,
     confirm_password: String,
 }
 
-
 impl Credentials {
-
     pub fn new(username: String, password: String, confirm_password: String) -> Self {
         Self {
             username,
@@ -58,19 +52,22 @@ impl Credentials {
         &mut self.confirm_password
     }
 
-
-    /// Generate a Salt from the username
-    pub fn generate_saltstring(&self) -> Result<SaltString, anyhow::Error> {
-        let salt_array = Sha256::digest(self.username.as_bytes());
-        let salt = salt_array.to_vec();
-        let salt = salt.iter().map(|b| format!("{:02x}", b)).collect::<String>();
-        let salt = SaltString::from_b64(&salt).map_err(|e| anyhow!("Failed to generate salt string {:?}", e))?;
-        Ok(salt)
+    /// Copy password to confirm password
+    pub fn copy_passwd_to_confirm(&mut self) {
+        self.confirm_password = self.password.clone();
     }
 
     pub fn is_valid(&self) -> Result<(), anyhow::Error> {
-        if self.username.is_empty() || self.password.is_empty() || self.confirm_password.is_empty() {
-            return Err(anyhow!("Username and Password must be provided"));
+        if self.username.is_empty() {
+            return Err(anyhow!("Username must be provided"));
+        }
+        
+        if self.password.is_empty() {
+            return Err(anyhow!("Password must be provided"));
+        }
+
+        if self.confirm_password.is_empty() {
+            return Err(anyhow!("Confirm password must be provided"));
         }
 
         if self.password != self.confirm_password {
@@ -88,11 +85,13 @@ mod tests {
 
     #[test]
     fn test_credentials() {
-        let mut credentials = Credentials::new("test".to_string(), "password".to_string(), "password".to_string());
+        let mut credentials = Credentials::new(
+            "test".to_string(),
+            "password".to_string(),
+            "password".to_string(),
+        );
         assert!(credentials.is_valid().is_ok());
 
-        let salt = credentials.generate_saltstring().unwrap();
-        assert_eq!(salt.to_string().len(), 64);
 
         credentials.destroy();
         assert!(credentials.is_valid().is_err());

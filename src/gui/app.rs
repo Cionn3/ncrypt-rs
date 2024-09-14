@@ -68,7 +68,7 @@ impl NCryptApp {
         let app = Self {
             credentials: Default::default(),
             file_path: Default::default(),
-            argon_params: Default::default(),
+            argon_params: Argon2Params::fast(),
         };
 
         app.set_background_color(&cc.egui_ctx);
@@ -275,7 +275,7 @@ impl NCryptApp {
             ui.label("Memory Cost (kB):");
 
             ui.add(
-                Slider::new(&mut self.argon_params.m_cost, 2048..=256_000)
+                Slider::new(&mut self.argon_params.m_cost, 2048..=10_000_000)
                     .drag_value_speed(100.0)
                     .custom_formatter(|v, _ctx| {
                         let v_as_int = v.round() as u32;
@@ -288,7 +288,7 @@ impl NCryptApp {
             ui.label("Iterations:");
 
             ui.add(
-                Slider::new(&mut self.argon_params.t_cost, 100..=5000)
+                Slider::new(&mut self.argon_params.t_cost, 1..=5000)
                     .drag_value_speed(100.0)
                     .custom_formatter(|v, _ctx| {
                         let v_as_int = v.round() as u32;
