@@ -9,7 +9,7 @@ edition = "2021"
 [dependencies]
 
 # GUI
-eframe = "0.28.1"
+eframe = "0.29.1"
 rfd = "0.14.1"
 
 # Local crates
@@ -17,4 +17,3 @@ encryption = { path = "crates/encryption" }
 
 # Misc
 num-format = "0.4.4"
-lazy_static = "1.4.0"
