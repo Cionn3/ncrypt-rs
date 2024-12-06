@@ -10,9 +10,42 @@ use chacha20poly1305::{
 use super::credentials::Credentials;
 use super::{Argon2Params, EncryptedInfo};
 use anyhow::anyhow;
+use bincode;
 
-/// A seperator that we use to seperate the encrypted data and the encrypted info
-pub const SEPERATOR: &[u8] = b"Souvlaki is a Greek fast food consisting of small pieces of meat and sometimes vegetables grilled on a skewer. It is usually eaten straight off the skewer while still hot";
+
+/*
+█████████████████████████████████████████████████████████████████████████
+█                                                                       █
+█                           nCrypt File Format                         █
+█                                                                       █
+█    ┌───────────┬───────────────┬───────────────┬────────────────────┐ █
+█    │ Header    │ Metadata Len  │ Metadata      │ Encrypted Data     │ █
+█    │ 8 bytes   │ 4 bytes (LE)  │ Variable Size │ Variable Size      │ █
+█    └───────────┴───────────────┴───────────────┴────────────────────┘ █
+█                                                                       █
+█   Details:                                                            █
+█   - **Header**: A fixed 8-byte ASCII string identifying the format    █
+█     and version (e.g., "nCrypt1\0").                                  █
+█   - **Metadata Length**: A 4-byte unsigned integer in little-endian   █
+█     format specifying the size of the metadata section.               █
+█   - **Metadata**: Serialized metadata containing Argon2 parameters,  █
+█     salt, nonce, etc. (encoded using `bincode`).                      █
+█   - **Encrypted Data**: The raw encrypted data.                       █
+█                                                                       █
+█   Example (hex representation):                                       █
+█   [6E 43 72 79 70 74 31 00]  [12 00 00 00]  [Serialized Metadata]    █
+█   [Encrypted Data]                                                    █
+█                                                                       █
+█████████████████████████████████████████████████████████████████████████
+*/
+
+
+/// File Header
+/// 
+/// The first 8 bytes of the file format, this is just a simple versioning just in case in the future i do breaking changes
+pub const HEADER: &[u8; 8] = b"nCrypt1\0";
+
+
 
 /// Encrypts the given data using the provided credentials
 ///
@@ -26,18 +59,27 @@ pub fn encrypt_data(
     data: Vec<u8>,
     credentials: Credentials,
 ) -> Result<Vec<u8>, anyhow::Error> {
-    let (encrypted, info) = encrypt(argon_params.clone(), credentials, data)?;
+    let (encrypted_data, info) = encrypt(argon_params.clone(), credentials, data)?;
 
-    let info_serialized = serde_json::to_vec(&info)?;
+    let serialized_info = bincode::serialize(&info)?;
 
-    // SEPERATOR + Encrypted info
-    let seperator_with_info = [SEPERATOR, info_serialized.as_slice()].concat();
+    // Construct the file format
+    let mut result = Vec::new();
 
-    // Encrypted data + SEPERATOR + Encrypted info
-    let encrypted_data_with_info =
-        [encrypted.as_slice(), seperator_with_info.as_slice()].concat();
+    // Append the header
+    result.extend_from_slice(HEADER);
 
-    Ok(encrypted_data_with_info)
+    // Append the metadata Length
+    let metadata_length = serialized_info.len() as u32;
+    result.extend_from_slice(&metadata_length.to_le_bytes());
+
+    // Append the metadata
+    result.extend_from_slice(&serialized_info);
+
+    // Append the encrypted Data
+    result.extend_from_slice(&encrypted_data);
+
+    Ok(result)
 }
 
 /// Encrypts the given data using the provided credentials

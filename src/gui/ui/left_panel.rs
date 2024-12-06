@@ -1,4 +1,4 @@
-use eframe::egui::{ Slider, Ui };
+use eframe::egui::{Slider, Ui };
 use crate::app::NCryptApp;
 use num_format::{ Locale, ToFormattedString };
 use super::*;

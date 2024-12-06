@@ -4,6 +4,9 @@ use encryption::prelude::*;
 use crate::app::NCryptApp;
 use super::*;
 
+const FILE_EXTENSION: &str = ".ncrypt";
+
+
 pub fn show(ui: &mut Ui, app: &mut NCryptApp) {
     ui.vertical_centered(|ui| {
         ui.set_max_width(250.0);
@@ -113,7 +116,7 @@ fn encrypt(ui: &mut Ui, app: &mut NCryptApp) {
                 }
             };
 
-            let new_file_path = format!("{}.encrypted", file_path);
+            let new_file_path = format!("{}{}", file_path, FILE_EXTENSION);
 
             match std::fs::write(&new_file_path, &encrypted_data) {
                 Ok(_) => {
@@ -168,7 +171,7 @@ fn decrypt(ui: &mut Ui, app: &mut NCryptApp) {
             };
 
             // remove the .ecrypted extension
-            let new_file_path = file_path.replace(".encrypted", "");
+            let new_file_path = file_path.replace(FILE_EXTENSION, "");
 
             match std::fs::write(&new_file_path, &decrypted_data) {
                 Ok(_) => {

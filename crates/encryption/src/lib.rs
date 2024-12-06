@@ -3,8 +3,9 @@ pub mod encrypt;
 pub mod decrypt;
 pub mod prelude;
 
-use anyhow::anyhow;
-use argon2::Argon2;
+pub use anyhow::anyhow;
+pub use argon2::Argon2;
+pub use zeroize;
 
 
 #[derive(serde::Serialize, serde::Deserialize)]

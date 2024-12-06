@@ -6,7 +6,7 @@ use chacha20poly1305::aead::{generic_array::GenericArray, Aead, Payload};
 
 use super::{
     credentials::Credentials,
-    encrypt::{xchacha20_poly_1305, SEPERATOR},
+    encrypt::{xchacha20_poly_1305, HEADER},
     EncryptedInfo,
 };
 
@@ -19,26 +19,33 @@ use anyhow::anyhow;
 /// - `data` - The data to decrypt
 /// - `credentials` - The credentials to use for decryption
 pub fn decrypt_data(data: Vec<u8>, credentials: Credentials) -> Result<Vec<u8>, anyhow::Error> {
-    let decrypted_data = decrypt(credentials, data)?;
+
+        // Verify Header
+        if &data[0..8] != HEADER {
+            return Err(anyhow!("Invalid file format"));
+        }
+    
+        // Read Metadata Length
+        let metadata_length = u32::from_le_bytes(
+            data[8..12].try_into().map_err(|_| anyhow!("Failed to parse metadata length"))?,
+        );
+    
+        // Extract Metadata
+        let metadata_start = 12;
+        let metadata_end = metadata_start + metadata_length as usize;
+        let metadata_bytes = &data[metadata_start..metadata_end];
+    
+        let info: EncryptedInfo = bincode::deserialize(metadata_bytes)?;
+    
+        // Extract Encrypted Data
+        let encrypted_data = &data[metadata_end..];
+
+    let decrypted_data = decrypt(credentials, info, encrypted_data.to_vec())?;
     Ok(decrypted_data)
 }
 
-fn decrypt(mut credentials: Credentials, data: Vec<u8>) -> Result<Vec<u8>, anyhow::Error> {
+fn decrypt(mut credentials: Credentials, info: EncryptedInfo, data: Vec<u8>) -> Result<Vec<u8>, anyhow::Error> {
     credentials.is_valid()?;
-
-    // Find the position of SEPERATOR
-    let identifier_position = data.windows(SEPERATOR.len())
-        .position(|window| window == SEPERATOR)
-        .ok_or(anyhow!("SEPERATOR not found in data"))?;
-
-    // Split the data
-    let (encrypted_data, identifier_data) = data.split_at(identifier_position);
-    let info_serialized = &identifier_data[SEPERATOR.len()..];
-
-
-    // Deserialize EncryptedInfo
-    let info: EncryptedInfo = serde_json::from_slice(info_serialized)?;
-
 
     let params = Params::new(
         info.argon2_params.m_cost,
@@ -67,7 +74,7 @@ fn decrypt(mut credentials: Credentials, data: Vec<u8>) -> Result<Vec<u8>, anyho
     let username = credentials.username().clone();
 
     let payload = Payload {
-        msg: encrypted_data.as_ref(),
+        msg: data.as_ref(),
         aad: username.as_bytes(),
     };
 

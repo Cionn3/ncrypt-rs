@@ -16,7 +16,7 @@ fn main() -> Result<(), eframe::Error> {
         ..Default::default()
     };
     eframe::run_native(
-        "NCrypt",
+        "nCrypt",
         options,
         Box::new(|cc| { Ok(Box::new(NCryptApp::new(cc))) })
     )
