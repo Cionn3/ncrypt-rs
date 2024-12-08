@@ -57,29 +57,39 @@ fn decrypt(mut credentials: Credentials, info: EncryptedInfo, data: Vec<u8>) -> 
 
     let argon2 = Argon2::new(Algorithm::default(), Version::default(), params.clone());
 
-    let salt_string = SaltString::from_b64(&info.password_salt)
-        .map_err(|e| anyhow!("Failed to parse salt {:?}", e))?;
+    let password_salt = SaltString::from_b64(&info.password_salt)
+        .map_err(|e| anyhow!("Failed to parse password salt {:?}", e))?;
 
     let password_hash = argon2
-        .hash_password(credentials.password().as_bytes(), &salt_string)
+        .hash_password(credentials.password().as_bytes(), &password_salt)
         .map_err(|e| anyhow!("Failed to hash password {:?}", e))?;
 
     let key = password_hash
         .hash
-        .ok_or(anyhow!("Failed to get the hash output"))?;
+        .ok_or(anyhow!("Failed to get the password hash output"))?;
 
     // create the cipher using the hashed password as the key
     let cipher = xchacha20_poly_1305(key);
 
-    let username = credentials.username().clone();
+    let username_salt = SaltString::from_b64(&info.username_salt)
+        .map_err(|e| anyhow!("Failed to parse username salt {:?}", e))?;
 
-    let payload = Payload {
-        msg: data.as_ref(),
-        aad: username.as_bytes(),
-    };
+    let username_hash = argon2
+        .hash_password(credentials.username().as_bytes(), &username_salt)
+        .map_err(|e| anyhow!("Failed to hash username {:?}", e))?;
 
     credentials.destroy();
 
+    let aad = username_hash
+        .hash
+        .ok_or(anyhow!("Failed to get the username hash output"))?;
+
+    let payload = Payload {
+        msg: data.as_ref(),
+        aad: aad.as_bytes(),
+    };
+
+    
     let nonce = GenericArray::from_slice(&info.cipher_nonce);
 
     let decrypted_data = cipher

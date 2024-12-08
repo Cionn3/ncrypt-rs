@@ -11,14 +11,16 @@ pub use zeroize;
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct EncryptedInfo {
     pub password_salt: String,
+    pub username_salt: String,
     pub cipher_nonce: Vec<u8>,
     pub argon2_params: Argon2Params,
 }
 
 impl EncryptedInfo {
-    pub fn new(password_salt: String, cipher_nonce: Vec<u8>, argon2_params: Argon2Params) -> Self {
+    pub fn new(password_salt: String, username_salt: String, cipher_nonce: Vec<u8>, argon2_params: Argon2Params) -> Self {
         Self {
             password_salt,
+            username_salt,
             cipher_nonce,
             argon2_params
         }
@@ -120,7 +122,7 @@ mod tests {
     use super::prelude::*;
 
     #[test]
-    fn can_encrypt() {
+    fn can_encrypt_decrypt() {
 
         let some_data = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
         let credentials = Credentials::new("username".to_string(), "password".to_string(), "password".to_string());

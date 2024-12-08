@@ -41,8 +41,6 @@ use bincode;
 
 
 /// File Header
-/// 
-/// The first 8 bytes of the file format, this is just a simple versioning just in case in the future i do breaking changes
 pub const HEADER: &[u8; 8] = b"nCrypt1\0";
 
 
@@ -100,10 +98,12 @@ fn encrypt(
 
     let argon2 = Argon2::new(Algorithm::default(), Version::default(), params);
 
-    let salt = SaltString::generate(&mut OsRng);
+    let password_salt = SaltString::generate(&mut OsRng);
+    let username_salt = SaltString::generate(&mut OsRng);
+
 
     // hash the password
-    let password_hash = match argon2.hash_password(credentials.password().as_bytes(), &salt) {
+    let password_hash = match argon2.hash_password(credentials.password().as_bytes(), &password_salt) {
         Ok(hash) => hash,
         Err(e) => {
             return Err(anyhow!("Failed to hash password {:?}", e));
@@ -113,26 +113,35 @@ fn encrypt(
     // get the hash output
     let key = password_hash
         .hash
-        .ok_or(anyhow!("Failed to get the hash output"))?;
+        .ok_or(anyhow!("Failed to get the password hash output"))?;
 
-    // create the cipher using the hashed password as the key
-    let cipher = xchacha20_poly_1305(key);
-
-    let nonce = XChaCha20Poly1305::generate_nonce(&mut OsRng);
-    let username = credentials.username().clone();
-
-    let payload = Payload {
-        msg: data.as_ref(),
-        aad: username.as_bytes(),
+    // hash the username for the AAD
+    let username_hash = match argon2.hash_password(credentials.username().as_bytes(), &username_salt) {
+        Ok(hash) => hash,
+        Err(e) => return Err(anyhow!("Failed to hash username {:?}", e)),
     };
 
     credentials.destroy();
 
+    let aad = username_hash.hash.ok_or(anyhow!("Failed to get the username hash output"))?;
+
+
+    // create the cipher using the hashed password as the key
+    let cipher = xchacha20_poly_1305(key);
+    let cipher_nonce = XChaCha20Poly1305::generate_nonce(&mut OsRng);
+
+
+    let payload = Payload {
+        msg: data.as_ref(),
+        aad: aad.as_bytes(),
+    };
+
+
     let encrypted_data = cipher
-        .encrypt(&nonce, payload)
+        .encrypt(&cipher_nonce, payload)
         .map_err(|e| anyhow!("Failed to encrypt data {:?}", e))?;
 
-    let info = EncryptedInfo::new(salt.to_string(), nonce.to_vec(), argon_params);
+    let info = EncryptedInfo::new(password_salt.to_string(), username_salt.to_string(), cipher_nonce.to_vec(), argon_params);
 
     Ok((encrypted_data, info))
 }
