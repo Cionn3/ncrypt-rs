@@ -1,18 +1,20 @@
-pub mod central_panel;
-pub mod left_panel;
-
 use eframe::egui::{Button, Color32, TextEdit, RichText, Sense, WidgetText};
+
+pub mod file_encryption;
+pub mod text_hashing;
 
 pub struct WindowMsg {
     pub open: bool,
     pub message: String,
+    pub title: String,
 }
 
 impl Default for WindowMsg {
     fn default() -> Self {
         Self {
             open: false,
-            message: Default::default(),
+            message: String::new(),
+            title: String::new()
         }
     }
 }

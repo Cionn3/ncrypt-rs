@@ -15,21 +15,17 @@ use eframe::{
     },
     CreationContext,
 };
+use encryption::zeroize::Zeroize;
 
 use std::time::Duration;
-use encryption::prelude::*;
-use std::sync::{ Arc, RwLock };
-use crate::gui::ui::{ central_panel, left_panel, WindowMsg };
+use crate::gui::{ central_panel, left_panel, right_panel, GUI };
 use window::window_frame;
 
 pub mod window;
 
 /// The main application struct
 pub struct NCryptApp {
-    pub credentials: Credentials,
-    pub file_path: String,
-    pub argon_params: Argon2Params,
-    pub pop_msg: Arc<RwLock<WindowMsg>>,
+    pub gui: GUI,
 }
 
 impl NCryptApp {
@@ -38,10 +34,7 @@ impl NCryptApp {
         std::thread::spawn(move || request_repaint(ctx));
 
         let app = Self {
-            credentials: Default::default(),
-            file_path: Default::default(),
-            argon_params: Argon2Params::fast(),
-            pop_msg: Arc::new(RwLock::new(WindowMsg::default())),
+            gui: GUI::new(),
         };
 
         Self::set_style(&cc.egui_ctx);
@@ -82,28 +75,44 @@ impl eframe::App for NCryptApp {
 
             let frame = Frame::none().fill(Color32::from_hex("#212529").unwrap());
 
+            // UI that belongs to the right panel
+            SidePanel::right("right_panel")
+                .min_width(50.0)
+                .resizable(false)
+                .frame(
+                    frame.clone().inner_margin(Margin { left: 20.0, right: 0.0, top: 100.0, bottom: 0.0 })
+                )
+                .show_inside(ui, |ui| {
+                    right_panel::show(ui, &mut self.gui);
+                });
+    
+
             // UI that belongs to the left panel
             SidePanel::left("left_panel")
-                .min_width(100.0)
+                .min_width(50.0)
                 .resizable(false)
-                .frame(frame.clone())
+                .frame(
+                    frame.clone().inner_margin(Margin { left: 0.0, right: 0.0, top: 100.0, bottom: 0.0 })
+                )
                 .show_inside(ui, |ui| {
-                    left_panel::show(ui, self);
+                    left_panel::show(ui, &mut self.gui);
                 });
 
             // UI that belongs to the central panel
             CentralPanel::default()
                 .frame(
-                    frame.inner_margin(Margin { left: 0.0, right: 200.0, top: 30.0, bottom: 0.0 })
+                    frame.inner_margin(Margin { left: 0.0, right: 0.0, top: 30.0, bottom: 0.0 })
                 )
                 .show_inside(ui, |ui| {
-                    central_panel::show(ui, self);
+                    central_panel::show(ui, &mut self.gui);
                 });
         });
     }
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
-        self.credentials.destroy();
+        self.gui.encryption_ui.credentials.destroy();
+        self.gui.text_hashing_ui.input_text.zeroize();
+        self.gui.text_hashing_ui.output_hash.zeroize();
     }
 }
 

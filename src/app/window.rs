@@ -1,4 +1,4 @@
-use eframe::egui::{self, CentralPanel, Stroke, UiBuilder, Color32, ViewportCommand};
+use eframe::egui::{self, CentralPanel, Color32, Margin, Stroke, UiBuilder, ViewportCommand};
 
 
 /// A Custom window frame for the App
@@ -9,6 +9,7 @@ pub fn window_frame(ctx: &egui::Context, title: &str, add_contents: impl FnOnce(
         rounding: 10.0.into(),
         stroke: ctx.style().visuals.widgets.noninteractive.fg_stroke,
         outer_margin: 0.5.into(), // so the stroke is within the bounds
+        inner_margin: Margin { left: 0.0, right: 0.0, top: 0.0, bottom: 0.0},
         ..Default::default()
     };
 

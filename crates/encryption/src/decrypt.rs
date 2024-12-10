@@ -22,12 +22,12 @@ pub fn decrypt_data(data: Vec<u8>, credentials: Credentials) -> Result<Vec<u8>, 
 
         // Verify Header
         if &data[0..8] != HEADER {
-            return Err(anyhow!("Invalid file format"));
+            return Err(anyhow!("Header not found, invalid file format?"));
         }
     
         // Read Metadata Length
         let metadata_length = u32::from_le_bytes(
-            data[8..12].try_into().map_err(|_| anyhow!("Failed to parse metadata length"))?,
+            data[8..12].try_into().map_err(|e| anyhow!("Failed to parse metadata length {}", e))?,
         );
     
         // Extract Metadata
@@ -35,7 +35,7 @@ pub fn decrypt_data(data: Vec<u8>, credentials: Credentials) -> Result<Vec<u8>, 
         let metadata_end = metadata_start + metadata_length as usize;
         let metadata_bytes = &data[metadata_start..metadata_end];
     
-        let info: EncryptedInfo = bincode::deserialize(metadata_bytes)?;
+        let info: EncryptedInfo = bincode::deserialize(metadata_bytes).map_err(|e| anyhow!("Deserialization failed {}", e))?;
     
         // Extract Encrypted Data
         let encrypted_data = &data[metadata_end..];
