@@ -9,6 +9,12 @@ pub struct Credentials {
     confirm_password: String,
 }
 
+impl Drop for Credentials {
+    fn drop(&mut self) {
+        self.destroy();
+    }
+}
+
 impl Credentials {
     pub fn new(username: String, password: String, confirm_password: String) -> Self {
         Self {
@@ -54,7 +60,8 @@ impl Credentials {
 
     /// Copy password to confirm password
     pub fn copy_passwd_to_confirm(&mut self) {
-        self.confirm_password = self.password.clone();
+        self.confirm_password.clear();
+        self.confirm_password.push_str(&self.password);
     }
 
     pub fn is_valid(&self) -> Result<(), anyhow::Error> {
